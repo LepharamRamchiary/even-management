@@ -130,4 +130,35 @@ const updateEvent = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, updatedEvent, "Event updated successfully"));
 });
 
-export { createEvent, getEvents, getUserEvents, updateEvent };
+const deleteEvent = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const { userId } = req.body;
+
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    throw new ApiError(400, "Invalid event id");
+  }
+
+  if (!userId) {
+    throw new ApiError(400, "userId is required to delete event");
+  }
+
+  const event = await Event.findById(id);
+  if (!event) {
+    throw new ApiError(404, "Event not found");
+  }
+
+  const isCreator = event.createdBy.toString() === userId;
+  const isParticipant = event.participants.some((p) => p.toString() === userId);
+
+  if (!isCreator && !isParticipant) {
+    throw new ApiError(403, "You are not allowed to delete this event");
+  }
+
+  await Event.findByIdAndDelete(id);
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, null, "Event deleted successfully"));
+});
+
+export { createEvent, getEvents, getUserEvents, updateEvent, deleteEvent };
