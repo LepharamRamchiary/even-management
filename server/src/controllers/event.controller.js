@@ -37,7 +37,7 @@ const createEvent = asyncHandler(async (req, res) => {
     .json(new ApiResponse(201, event, "Event created successfully"));
 });
 
-const getEvents = asyncHandler(async (req, res) => {him 
+const getEvents = asyncHandler(async (req, res) => {
   const page = parseInt(req.query.page) || 1;
   const limit = parseInt(req.query.limit) || 10;
   const skip = (page - 1) * limit;
@@ -68,7 +68,7 @@ const getEvents = asyncHandler(async (req, res) => {him
 
 const getUserEvents = asyncHandler(async (req, res) => {
   const { id } = req.params;
-//   console.log(id);
+  //   console.log(id);
 
   if (!mongoose.Types.ObjectId.isValid(id)) {
     throw new ApiError(400, "Invalid user id");
@@ -83,4 +83,51 @@ const getUserEvents = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, events, "Events fetched successfully"));
 });
 
-export { createEvent, getEvents, getUserEvents };
+const updateEvent = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const { userId, startDate, startTime, endDate, endTime, timezone } = req.body;
+
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    throw new ApiError(400, "Invalid event id");
+  }
+
+  if (!userId) {
+    throw new ApiError(400, "userId is required to update event");
+  }
+
+  const event = await Event.findById(id);
+  if (!event) {
+    throw new ApiError(404, "Event not found");
+  }
+
+  const isCreator = event.createdBy.toString() === userId;
+  const isParticipant = event.participants.some((p) => p.toString() === userId);
+
+  if (!isCreator && !isParticipant) {
+    throw new ApiError(403, "You are not allowed to update this event");
+  }
+
+  const updatedEvent = await Event.findOneAndUpdate(
+    { _id: id },
+    {
+      $set: {
+        startDate: startDate || undefined,
+        startTime: startTime || undefined,
+        endDate: endDate || undefined,
+        endTime: endTime || undefined,
+        timezone: timezone || undefined,
+      },
+    },
+    { new: true }
+  );
+
+  if (!updatedEvent) {
+    throw new ApiError(404, "Event not found");
+  }
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, updatedEvent, "Event updated successfully"));
+});
+
+export { createEvent, getEvents, getUserEvents, updateEvent };
