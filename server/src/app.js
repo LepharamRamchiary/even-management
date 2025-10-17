@@ -14,7 +14,9 @@ app.use(
 app.use(express.json());
 
 // routes import
+import userRouter from "./routes/user.route.js";
 
 // routes declaration
+app.use("/api/user", userRouter);
 
 export { app };
