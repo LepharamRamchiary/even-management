@@ -35,4 +35,5 @@ const getUsers = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, user, "User created successfully"));
 });
 
+
 export { addUser, getUsers };
