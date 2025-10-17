@@ -15,8 +15,10 @@ app.use(express.json());
 
 // routes import
 import userRouter from "./routes/user.route.js";
+import eventRouter from "./routes/event.route.js";
 
 // routes declaration
 app.use("/api/user", userRouter);
+app.use("/api/events", eventRouter);
 
 export { app };
