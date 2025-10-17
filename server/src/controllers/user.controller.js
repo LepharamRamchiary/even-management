@@ -25,4 +25,14 @@ const addUser = asyncHandler(async (req, res) => {
     .json(new ApiResponse(201, user, "User created successfully"));
 });
 
-export { addUser };
+const getUsers = asyncHandler(async (req, res) => {
+  const user = await User.find();
+  if (!user) {
+    throw new ApiError(500, "Something went wrong when fetching users");
+  }
+  return res
+    .status(200)
+    .json(new ApiResponse(200, user, "User created successfully"));
+});
+
+export { addUser, getUsers };
