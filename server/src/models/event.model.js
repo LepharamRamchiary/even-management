@@ -2,11 +2,15 @@ import mongoose, { Schema } from "mongoose";
 
 const eventSchema = new Schema(
   {
-    profiles: [
+    createdBy: {
+      type: Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
+    participants: [
       {
         type: Schema.Types.ObjectId,
         ref: "User",
-        required: true,
       },
     ],
     timezone: {
