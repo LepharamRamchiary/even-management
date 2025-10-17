@@ -2,6 +2,7 @@ import { asyncHandler } from "../utils/asyncHandler.js";
 import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { Event } from "../models/event.model.js";
+import mongoose from "mongoose";
 
 const createEvent = asyncHandler(async (req, res) => {
   const {
@@ -36,14 +37,12 @@ const createEvent = asyncHandler(async (req, res) => {
     .json(new ApiResponse(201, event, "Event created successfully"));
 });
 
-const getEvents = asyncHandler(async (req, res) => {
+const getEvents = asyncHandler(async (req, res) => {him 
   const page = parseInt(req.query.page) || 1;
   const limit = parseInt(req.query.limit) || 10;
   const skip = (page - 1) * limit;
 
-  const events = await Event.find()
-    .skip(skip)
-    .limit(limit);
+  const events = await Event.find().skip(skip).limit(limit);
 
   const totalEvents = await Event.countDocuments();
   const totalPages = Math.ceil(totalEvents / limit);
@@ -53,15 +52,35 @@ const getEvents = asyncHandler(async (req, res) => {
   }
 
   return res.status(200).json(
-    new ApiResponse(200, {
-      events,
-      currentPage: page,
-      totalPages,
-      totalEvents,
-      eventsPerPage: limit
-    }, "Events fetched successfully")
+    new ApiResponse(
+      200,
+      {
+        events,
+        currentPage: page,
+        totalPages,
+        totalEvents,
+        eventsPerPage: limit,
+      },
+      "Events fetched successfully"
+    )
   );
 });
 
+const getUserEvents = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+//   console.log(id);
 
-export { createEvent, getEvents };
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    throw new ApiError(400, "Invalid user id");
+  }
+
+  const events = await Event.find({
+    $or: [{ createdBy: id }, { participants: id }],
+  }).populate("createdBy participants", "name");
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, events, "Events fetched successfully"));
+});
+
+export { createEvent, getEvents, getUserEvents };
