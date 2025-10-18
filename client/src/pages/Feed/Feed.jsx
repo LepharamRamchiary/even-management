@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { Calendar, Clock, Plus, ChevronDown, Users, SquarePen, StickyNote, Search, X } from 'lucide-react';
 import Model from '../../components/Model/Model.jsx';
 import Edit from '../../components/Edit/Edit.jsx';
+import History from "../../components/History/History.jsx";
 import './Feed.css';
 
 export default function Feed() {
@@ -22,19 +23,31 @@ export default function Feed() {
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState(null);
+  const [modalMode, setModalMode] = useState('edit');
 
   const modalOpenRef = useRef(false);
   const selectedEventRef = useRef(null);
 
   const handleEditClick = useCallback((event) => {
     // console.log('Edit clicked for:', event._id);
-
+    setModalMode('edit');
     modalOpenRef.current = false;
     selectedEventRef.current = event;
     requestAnimationFrame(() => {
       setSelectedEvent(event);
       setIsModalOpen(false);
 
+      requestAnimationFrame(() => {
+        modalOpenRef.current = true;
+        setIsModalOpen(true);
+      });
+    });
+  }, []);
+
+  const handleViewLogsClick = useCallback((event) => {
+    setModalMode('history'); modalOpenRef.current = false;
+    requestAnimationFrame(() => {
+      setSelectedEvent(event); setIsModalOpen(false);
       requestAnimationFrame(() => {
         modalOpenRef.current = true;
         setIsModalOpen(true);
@@ -674,7 +687,11 @@ export default function Feed() {
                         <SquarePen size={24} />
                         <button type="button">Edit</button>
                       </div>
-                      <div className='btn-contain-btn'>
+                      <div className='btn-contain-btn'
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleViewLogsClick(event);
+                        }}>
                         <StickyNote size={24} />
                         <button type="button">View Logs</button>
                       </div>
@@ -688,13 +705,25 @@ export default function Feed() {
       </div>
       {isModalOpen && selectedEvent && (
         <Model isOpen={isModalOpen} onClose={handleModalClose}>
-          <Edit
-            key={selectedEvent._id}
-            eventData={selectedEvent}
-            onClose={handleModalClose}
-          />
+          {modalMode === 'edit' ? (
+            <Edit
+              key={`edit-${selectedEvent._id}-${modalMode}`}
+              eventData={selectedEvent}
+              onClose={handleModalClose}
+              onSave={() => {
+                if (selectedProfile) fetchUserEventsById(selectedProfile);
+              }}
+            />
+          ) : (
+            <History
+              key={`history-${selectedEvent._id}-${modalMode}`}
+              eventData={selectedEvent}
+              onClose={handleModalClose}
+            />
+          )}
         </Model>
       )}
+
     </div>
   );
 }

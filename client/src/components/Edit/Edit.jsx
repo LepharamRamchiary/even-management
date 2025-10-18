@@ -253,7 +253,10 @@ export default function Edit({ eventData, onClose }) {
 
             <div className="content-grid-edit">
                 <div className="event-card-edit">
-                    <h2 className="card-title">Edit Event</h2>
+                   <div className="card-header-edit">
+                     <h2 className="card-title-edit">Edit Event</h2>
+                     <button onClick={onClose} className="close-btn">&times;</button>
+                   </div>
 
                     {/* Rest of your form JSX remains the same */}
                     <div className="form-group">

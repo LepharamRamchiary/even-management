@@ -25,9 +25,6 @@ export default function Model({ isOpen, onClose, children }) {
         className={`modal-content ${isVisible ? 'visible' : ''}`}
         onClick={(e) => e.stopPropagation()}
       >
-        <button className="modal-close" onClick={onClose}>
-          ✕
-        </button>
         {children}
       </div>
     </div>
