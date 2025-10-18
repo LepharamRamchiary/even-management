@@ -5,7 +5,7 @@ import {
   getUserEvents,
   updateEvent,
   deleteEvent,
-  getUserEventHistory,
+  getEventHistory
 } from "../controllers/event.controller.js";
 
 const router = Router();
@@ -15,6 +15,6 @@ router.get("/", getEvents);
 router.get("/:id", getUserEvents);
 router.put("/:id", updateEvent);
 router.delete("/:id", deleteEvent);
-router.get("/:userId", getUserEventHistory);
+router.get("/:id/history/:userId", getEventHistory);
 
 export default router;

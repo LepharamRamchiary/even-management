@@ -87,6 +87,7 @@ const updateEvent = asyncHandler(async (req, res) => {
   const { id } = req.params;
   const {
     userId,
+    createdBy,
     startDate,
     startTime,
     endDate,
@@ -116,26 +117,73 @@ const updateEvent = asyncHandler(async (req, res) => {
   }
 
   const changes = {};
-  if (startDate && startDate !== event.startDate) changes.startDate = startDate;
-  if (startTime && startTime !== event.startTime) changes.startTime = startTime;
-  if (endDate && endDate !== event.endDate) changes.endDate = endDate;
-  if (endTime && endTime !== event.endTime) changes.endTime = endTime;
-  if (timezone && timezone !== event.timezone) changes.timezone = timezone;
+
+  if (createdBy && createdBy !== event.createdBy.toString()) {
+    changes.createdBy = {
+      oldValue: event.createdBy,
+      newValue: createdBy,
+    };
+  }
+
+  if (startDate && startDate !== event.startDate) {
+    changes.startDate = {
+      oldValue: event.startDate,
+      newValue: startDate,
+    };
+  }
+
+  if (startTime && startTime !== event.startTime) {
+    changes.startTime = {
+      oldValue: event.startTime,
+      newValue: startTime,
+    };
+  }
+
+  if (endDate && endDate !== event.endDate) {
+    changes.endDate = {
+      oldValue: event.endDate,
+      newValue: endDate,
+    };
+  }
+
+  if (endTime && endTime !== event.endTime) {
+    changes.endTime = {
+      oldValue: event.endTime,
+      newValue: endTime,
+    };
+  }
+
+  if (timezone && timezone !== event.timezone) {
+    changes.timezone = {
+      oldValue: event.timezone,
+      newValue: timezone,
+    };
+  }
+
   if (
     participants &&
-    JSON.stringify(participants) !== JSON.stringify(event.participants)
+    JSON.stringify(participants.sort()) !==
+      JSON.stringify(event.participants.map((p) => p.toString()).sort())
   ) {
-    changes.participants = participants;
+    changes.participants = {
+      oldValue: event.participants,
+      newValue: participants,
+    };
   }
 
   if (Object.keys(changes).length === 0) {
     throw new ApiError(400, "No fields have been changed");
   }
 
+  const updateFields = {};
+  Object.keys(changes).forEach((key) => {
+    updateFields[key] = changes[key].newValue;
+  });
+
   const updatedEvent = await Event.findByIdAndUpdate(
     id,
     {
-      $set: changes,
+      $set: updateFields,
       $push: {
         updateHistory: {
           updatedBy: userId,
@@ -186,72 +234,163 @@ const deleteEvent = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, null, "Event deleted successfully"));
 });
 
-const getUserEventHistory = asyncHandler(async (req, res) => {
-  const { userId } = req.params;
+const getEventHistory = asyncHandler(async (req, res) => {
+  const { id, userId } = req.params;
 
-  if (!mongoose.Types.ObjectId.isValid(userId)) {
-    throw new ApiError(400, "Invalid user id");
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    throw new ApiError(400, "Invalid event id");
   }
 
-  const events = await Event.find({
-    $or: [
-      { createdBy: userId },
-      { participants: userId },
-      { 'updateHistory.updatedBy': userId }
-    ]
-  })
-  .populate('createdBy', 'name')
-  .populate('participants', 'name')
-  .populate('updateHistory.updatedBy', 'name')
-  .select('updateHistory createdBy participants startDate endDate startTime endTime timezone');
+  const event = await Event.findById(id)
+    .populate({
+      path: "updateHistory.updatedBy",
+      select: "name",
+    })
+    .populate("createdBy", "name")
+    .populate("participants", "name")
+    .select("updateHistory createdBy participants");
 
-  if (!events) {
-    throw new ApiError(404, "No events found for this user");
+  if (!event) {
+    throw new ApiError(404, "Event not found");
   }
 
-  const formattedHistory = events.map(event => {
-    const eventHistory = event.updateHistory.map(entry => ({
-      eventId: event._id,
-      updatedBy: entry.updatedBy.name,
-      updatedAt: new Date(entry.updatedAt).toLocaleString(),
-      changes: Object.entries(entry.changes).map(([field, newValue]) => {
-        let readableField = field.charAt(0).toUpperCase() + field.slice(1);
-        let formattedValue = newValue;
+  const isCreator = event.createdBy._id.toString() === userId;
+  const isParticipant = event.participants.some(
+    (p) => p._id.toString() === userId
+  );
 
-        if (field.includes('Date')) {
-          formattedValue = new Date(newValue).toLocaleDateString();
-        } else if (field === 'participants') {
-          formattedValue = 'Participants list updated';
+  if (!isCreator && !isParticipant) {
+    throw new ApiError(403, "You are not allowed to view this event's history");
+  }
+
+  const formattedHistory = event.updateHistory.map((entry) => {
+    const changeDetails = Object.entries(entry.changes).map(
+      ([field, valueObj]) => {
+        let oldValue, newValue;
+
+        if (
+          valueObj &&
+          typeof valueObj === "object" &&
+          "oldValue" in valueObj
+        ) {
+          oldValue = valueObj.oldValue;
+          newValue = valueObj.newValue;
+        } else {
+          oldValue = "N/A";
+          newValue = valueObj;
+        }
+
+        let readableField = field;
+
+        switch (field) {
+          case "createdBy":
+            readableField = "Event Creator";
+            if (oldValue && oldValue !== "N/A") {
+              const oldCreator =
+                event.createdBy._id.toString() === oldValue.toString()
+                  ? event.createdBy
+                  : event.participants.find(
+                      (p) => p._id.toString() === oldValue.toString()
+                    );
+              oldValue = oldCreator ? oldCreator.name : oldValue;
+            }
+
+            if (newValue) {
+              const newCreator =
+                event.createdBy._id.toString() === newValue.toString()
+                  ? event.createdBy
+                  : event.participants.find(
+                      (p) => p._id.toString() === newValue.toString()
+                    );
+              newValue = newCreator ? newCreator.name : newValue;
+            }
+            break;
+
+          case "startDate":
+          case "endDate":
+            if (oldValue && oldValue !== "N/A") {
+              oldValue = new Date(oldValue).toLocaleDateString();
+            }
+            if (newValue) {
+              newValue = new Date(newValue).toLocaleDateString();
+            }
+            readableField = field === "startDate" ? "Start Date" : "End Date";
+            break;
+
+          case "startTime":
+            readableField = "Start Time";
+            break;
+
+          case "endTime":
+            readableField = "End Time";
+            break;
+
+          case "timezone":
+            readableField = "Timezone";
+            break;
+
+          case "participants":
+            readableField = "Participants";
+            if (oldValue && oldValue !== "N/A" && Array.isArray(oldValue)) {
+              const oldParticipants = event.participants.filter((p) =>
+                oldValue.some((id) => id.toString() === p._id.toString())
+              );
+              oldValue =
+                oldParticipants.map((p) => p.name).join(", ") || "None";
+            } else if (oldValue === "N/A") {
+              oldValue = "N/A";
+            } else {
+              oldValue = "None";
+            }
+
+            if (newValue && Array.isArray(newValue)) {
+              const newParticipants = event.participants.filter((p) =>
+                newValue.some((id) => id.toString() === p._id.toString())
+              );
+              newValue =
+                newParticipants.map((p) => p.name).join(", ") || "None";
+            } else {
+              newValue = "None";
+            }
+            break;
         }
 
         return {
           field: readableField,
-          newValue: formattedValue
+          oldValue: oldValue || "—",
+          newValue: newValue || "—",
+          changeType: "Modified",
         };
-      })
-    }));
+      }
+    );
 
     return {
-      eventId: event._id,
-      eventCreator: event.createdBy.name,
-      userRole: event.createdBy._id.toString() === userId ? 'Creator' : 'Participant',
-      updates: eventHistory
+      updatedBy: entry.updatedBy?.name || "Unknown",
+      updatedAt: new Date(entry.updatedAt).toLocaleString(),
+      changes: changeDetails,
     };
   });
 
   return res.status(200).json(
     new ApiResponse(
-      200, 
+      200,
       {
-        userId,
-        totalEvents: events.length,
-        totalUpdates: formattedHistory.reduce((acc, event) => acc + event.updates.length, 0),
-        eventHistory: formattedHistory
+        eventId: event._id,
+        createdBy: event.createdBy.name,
+        userRole: isCreator ? "Creator" : "Participant",
+        totalChanges: formattedHistory.length,
+        history: formattedHistory,
       },
-      "User's event history fetched successfully"
+      "Event history fetched successfully"
     )
   );
 });
 
-
-export { createEvent, getEvents, getUserEvents, updateEvent, deleteEvent, getUserEventHistory };
+export {
+  createEvent,
+  getEvents,
+  getUserEvents,
+  updateEvent,
+  deleteEvent,
+  getEventHistory,
+};
