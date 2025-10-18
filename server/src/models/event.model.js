@@ -13,6 +13,23 @@ const eventSchema = new Schema(
         ref: "User",
       },
     ],
+    updateHistory: [
+      {
+        updatedBy: {
+          type: Schema.Types.ObjectId,
+          ref: "User",
+          required: true,
+        },
+        updatedAt: {
+          type: Date,
+          default: Date.now,
+        },
+        changes: {
+          type: Object,
+          required: true,
+        },
+      },
+    ],
     timezone: {
       type: String,
       required: true,

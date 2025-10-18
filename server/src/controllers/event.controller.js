@@ -85,7 +85,15 @@ const getUserEvents = asyncHandler(async (req, res) => {
 
 const updateEvent = asyncHandler(async (req, res) => {
   const { id } = req.params;
-  const { userId, startDate, startTime, endDate, endTime, timezone, createdBy, participants } = req.body;
+  const {
+    userId,
+    startDate,
+    startTime,
+    endDate,
+    endTime,
+    timezone,
+    participants,
+  } = req.body;
 
   if (!mongoose.Types.ObjectId.isValid(id)) {
     throw new ApiError(400, "Invalid event id");
@@ -107,25 +115,40 @@ const updateEvent = asyncHandler(async (req, res) => {
     throw new ApiError(403, "You are not allowed to update this event");
   }
 
-  const updatedEvent = await Event.findOneAndUpdate(
-    { _id: id },
+  const changes = {};
+  if (startDate && startDate !== event.startDate) changes.startDate = startDate;
+  if (startTime && startTime !== event.startTime) changes.startTime = startTime;
+  if (endDate && endDate !== event.endDate) changes.endDate = endDate;
+  if (endTime && endTime !== event.endTime) changes.endTime = endTime;
+  if (timezone && timezone !== event.timezone) changes.timezone = timezone;
+  if (
+    participants &&
+    JSON.stringify(participants) !== JSON.stringify(event.participants)
+  ) {
+    changes.participants = participants;
+  }
+
+  if (Object.keys(changes).length === 0) {
+    throw new ApiError(400, "No fields have been changed");
+  }
+
+  const updatedEvent = await Event.findByIdAndUpdate(
+    id,
     {
-      $set: {
-        createdBy: createdBy || undefined,
-        participants: participants || undefined,
-        startDate: startDate || undefined,
-        startTime: startTime || undefined,
-        endDate: endDate || undefined,
-        endTime: endTime || undefined,
-        timezone: timezone || undefined,
+      $set: changes,
+      $push: {
+        updateHistory: {
+          updatedBy: userId,
+          updatedAt: new Date(),
+          changes: changes,
+        },
       },
     },
-    { new: true }
-  );
-
-  if (!updatedEvent) {
-    throw new ApiError(404, "Event not found");
-  }
+    {
+      new: true,
+      runValidators: true,
+    }
+  ).populate("createdBy participants", "name");
 
   return res
     .status(200)
@@ -163,4 +186,72 @@ const deleteEvent = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, null, "Event deleted successfully"));
 });
 
-export { createEvent, getEvents, getUserEvents, updateEvent, deleteEvent };
+const getUserEventHistory = asyncHandler(async (req, res) => {
+  const { userId } = req.params;
+
+  if (!mongoose.Types.ObjectId.isValid(userId)) {
+    throw new ApiError(400, "Invalid user id");
+  }
+
+  const events = await Event.find({
+    $or: [
+      { createdBy: userId },
+      { participants: userId },
+      { 'updateHistory.updatedBy': userId }
+    ]
+  })
+  .populate('createdBy', 'name')
+  .populate('participants', 'name')
+  .populate('updateHistory.updatedBy', 'name')
+  .select('updateHistory createdBy participants startDate endDate startTime endTime timezone');
+
+  if (!events) {
+    throw new ApiError(404, "No events found for this user");
+  }
+
+  const formattedHistory = events.map(event => {
+    const eventHistory = event.updateHistory.map(entry => ({
+      eventId: event._id,
+      updatedBy: entry.updatedBy.name,
+      updatedAt: new Date(entry.updatedAt).toLocaleString(),
+      changes: Object.entries(entry.changes).map(([field, newValue]) => {
+        let readableField = field.charAt(0).toUpperCase() + field.slice(1);
+        let formattedValue = newValue;
+
+        if (field.includes('Date')) {
+          formattedValue = new Date(newValue).toLocaleDateString();
+        } else if (field === 'participants') {
+          formattedValue = 'Participants list updated';
+        }
+
+        return {
+          field: readableField,
+          newValue: formattedValue
+        };
+      })
+    }));
+
+    return {
+      eventId: event._id,
+      eventCreator: event.createdBy.name,
+      userRole: event.createdBy._id.toString() === userId ? 'Creator' : 'Participant',
+      updates: eventHistory
+    };
+  });
+
+  return res.status(200).json(
+    new ApiResponse(
+      200, 
+      {
+        userId,
+        totalEvents: events.length,
+        totalUpdates: formattedHistory.reduce((acc, event) => acc + event.updates.length, 0),
+        eventHistory: formattedHistory
+      },
+      "User's event history fetched successfully"
+    )
+  );
+});
+
+
+export { createEvent, getEvents, getUserEvents, updateEvent, deleteEvent, getUserEventHistory };
