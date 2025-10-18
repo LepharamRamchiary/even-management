@@ -1,5 +1,7 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { Calendar, Clock, Plus, ChevronDown, Users, SquarePen, StickyNote, Search, X } from 'lucide-react';
+import Model from '../../components/Model/Model.jsx';
+import Edit from '../../components/Edit/Edit.jsx';
 import './Feed.css';
 
 export default function Feed() {
@@ -18,7 +20,43 @@ export default function Feed() {
   const [timezone, setTimezone] = useState('America/New_York');
   const [viewTimezone, setViewTimezone] = useState('America/New_York');
 
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [selectedEvent, setSelectedEvent] = useState(null);
 
+  const modalOpenRef = useRef(false);
+  const selectedEventRef = useRef(null);
+
+  const handleEditClick = useCallback((event) => {
+    // console.log('Edit clicked for:', event._id);
+
+    modalOpenRef.current = false;
+    selectedEventRef.current = event;
+    requestAnimationFrame(() => {
+      setSelectedEvent(event);
+      setIsModalOpen(false);
+
+      requestAnimationFrame(() => {
+        modalOpenRef.current = true;
+        setIsModalOpen(true);
+      });
+    });
+  }, []);
+
+  const handleModalClose = useCallback(() => {
+    console.log('Closing modal');
+    modalOpenRef.current = false;
+
+    setIsModalOpen(false);
+
+    requestAnimationFrame(() => {
+      setSelectedEvent(null);
+      selectedEventRef.current = null;
+
+      if (selectedProfile) {
+        fetchUserEventsById(selectedProfile);
+      }
+    });
+  }, [selectedProfile]);
 
   // Custom dropdown states
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
@@ -48,19 +86,45 @@ export default function Feed() {
     { label: 'Auckland (NZDT/NZST)', value: 'Pacific/Auckland' }
   ];
 
-  // CREATE EVENT API CALL
-  const handleCreateEvent = async () => {
+  const fetchUserEventsById = async (profileId) => {
+    if (!profileId) {
+      setUserEvents([]);
+      return;
+    }
 
+    setLoading(true);
+    setError(null);
+
+    try {
+      const res = await fetch(`http://localhost:8000/api/events/${profileId}`);
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.message || 'Failed to fetch events');
+      }
+
+      setUserEvents(data.data || []);
+    } catch (error) {
+      console.error('Error fetching user events:', error);
+      setError(error.message || 'Failed to fetch events');
+      setUserEvents([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // create event
+  const handleCreateEvent = async () => {
     if (endDate === startDate && endTime < startTime) {
       setError("End time cannot be earlier than start time!");
       return;
     }
 
-    // Validation
     if (!selectedProfileEvent) {
       setError('Please select a creator profile');
       return;
     }
+
     if (!startDate || !startTime || !endDate || !endTime) {
       setError('Please fill in all date and time fields');
       return;
@@ -80,8 +144,6 @@ export default function Feed() {
         endTime
       };
 
-      console.log('Sending event data:', eventData);
-
       const res = await fetch("http://localhost:8000/api/events", {
         method: "POST",
         headers: {
@@ -96,9 +158,6 @@ export default function Feed() {
         throw new Error(data.message || "Failed to create event");
       }
 
-      console.log('Event created successfully:', data);
-
-      // Reset form
       setSelectedProfileEvent('');
       setSelectedParticipants([]);
       setStartDate('');
@@ -107,13 +166,8 @@ export default function Feed() {
       setEndTime('09:00');
       setTimezone('America/New_York');
 
-      // Refresh events if a profile is selected for viewing
       if (selectedProfile) {
-        const eventsRes = await fetch(`http://localhost:8000/api/events/${selectedProfile}`);
-        const eventsData = await eventsRes.json();
-        if (eventsRes.ok) {
-          setUserEvents(eventsData.data || []);
-        }
+        fetchUserEventsById(selectedProfile);
       }
 
       alert('Event created successfully!');
@@ -125,8 +179,6 @@ export default function Feed() {
     }
   };
 
-
-  // Add new user
   const handleAddNewUser = async () => {
     if (!newUserName.trim()) return;
 
@@ -145,6 +197,7 @@ export default function Feed() {
       if (!res.ok) {
         throw new Error(data.message || "Failed to add user");
       }
+
       setUsers((prev) => [...prev, data.data]);
       setNewUserName("");
       setIsDropdownOpen(false);
@@ -156,9 +209,6 @@ export default function Feed() {
     }
   };
 
-
-
-  // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
@@ -173,8 +223,6 @@ export default function Feed() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-
-  // Fetch users
   useEffect(() => {
     const fetchUsers = async () => {
       setLoading(true);
@@ -201,30 +249,8 @@ export default function Feed() {
     fetchUsers();
   }, []);
 
-
-  // Fetch user events
   useEffect(() => {
-    const fetchUserEvents = async () => {
-      if (!selectedProfile) {
-        setUserEvents([]);
-        return;
-      }
-      setLoading(true);
-      setError(null);
-      try {
-        const res = await fetch(`http://localhost:8000/api/events/${selectedProfile}`);
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.message || 'Failed to fetch events');
-        setUserEvents(data.data || []);
-      } catch (error) {
-        console.error('Error fetching user events:', error);
-        setError(error.message || 'Failed to fetch events');
-        setUserEvents([]);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchUserEvents();
+    fetchUserEventsById(selectedProfile);
   }, [selectedProfile]);
 
   const filteredUsers = users.filter(user =>
@@ -235,7 +261,6 @@ export default function Feed() {
     user._id !== selectedProfileEvent &&
     user.name.toLowerCase().includes(participantSearchQuery.toLowerCase())
   );
-
 
   const getSelectedUserName = () => {
     const user = users.find(u => u._id === selectedProfileEvent);
@@ -266,7 +291,6 @@ export default function Feed() {
   return (
     <div className="event-container">
       <div className="event-header">
-
         <div className="header-content">
           <h1 className="event-title">Event Management</h1>
           <p className="event-subtitle">Create and manage events across multiple timezones</p>
@@ -298,7 +322,6 @@ export default function Feed() {
       )}
 
       <div className="content-grid">
-        {/* Create Event Section */}
         <div className="event-card">
           <h2 className="card-title">Create Event</h2>
 
@@ -338,7 +361,6 @@ export default function Feed() {
                     )}
                   </div>
 
-                  {/* User List */}
                   <div className="user-list">
                     {filteredUsers.length > 0 ? (
                       filteredUsers.map((user) => (
@@ -360,7 +382,6 @@ export default function Feed() {
                     )}
                   </div>
 
-                  {/* Add New User Section */}
                   <div className="add-user-section">
                     <div className="add-user-divider" />
                     <div className="add-user-input-wrapper">
@@ -426,7 +447,6 @@ export default function Feed() {
                     )}
                   </div>
 
-                  {/* Participants List with Checkmarks */}
                   <div className="user-list">
                     {filteredParticipants.length > 0 ? (
                       filteredParticipants.map((user) => (
@@ -547,7 +567,6 @@ export default function Feed() {
             {loading ? 'Creating...' : 'Create Event'}
           </button>
         </div>
-
         {/* Events Section */}
         <div className="event-card">
           <h2 className="card-title">Events</h2>
@@ -645,13 +664,19 @@ export default function Feed() {
                     </div>
                     <hr />
                     <div className='btn-contain'>
-                      <div className='btn-contain-btn'>
+                      <div
+                        className='btn-contain-btn'
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleEditClick(event);
+                        }}
+                      >
                         <SquarePen size={24} />
-                        <button>Edit</button>
+                        <button type="button">Edit</button>
                       </div>
                       <div className='btn-contain-btn'>
                         <StickyNote size={24} />
-                        <button>View Logs</button>
+                        <button type="button">View Logs</button>
                       </div>
                     </div>
                   </div>
@@ -661,6 +686,15 @@ export default function Feed() {
           )}
         </div>
       </div>
+      {isModalOpen && selectedEvent && (
+        <Model isOpen={isModalOpen} onClose={handleModalClose}>
+          <Edit
+            key={selectedEvent._id}
+            eventData={selectedEvent}
+            onClose={handleModalClose}
+          />
+        </Model>
+      )}
     </div>
   );
 }

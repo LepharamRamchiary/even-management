@@ -85,7 +85,7 @@ const getUserEvents = asyncHandler(async (req, res) => {
 
 const updateEvent = asyncHandler(async (req, res) => {
   const { id } = req.params;
-  const { userId, startDate, startTime, endDate, endTime, timezone } = req.body;
+  const { userId, startDate, startTime, endDate, endTime, timezone, createdBy, participants } = req.body;
 
   if (!mongoose.Types.ObjectId.isValid(id)) {
     throw new ApiError(400, "Invalid event id");
@@ -111,6 +111,8 @@ const updateEvent = asyncHandler(async (req, res) => {
     { _id: id },
     {
       $set: {
+        createdBy: createdBy || undefined,
+        participants: participants || undefined,
         startDate: startDate || undefined,
         startTime: startTime || undefined,
         endDate: endDate || undefined,
