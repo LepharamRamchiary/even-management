@@ -6,7 +6,6 @@ import Edit from '../../components/Edit/Edit.jsx';
 import History from "../../components/History/History.jsx";
 import './Feed.css';
 
-// Redux actions
 import { fetchUsers, addUser, clearUserError } from '../../store/slices/userSlice';
 import { fetchUserEvents, createEvent, setSelectedEvent, clearSelectedEvent } from '../../store/slices/eventSlice';
 import {
@@ -28,11 +27,14 @@ import {
   setTimezone,
   setViewTimezone,
   resetEventForm,
+  setIsProfileDropdownOpen,
+  setProfileSearchQuery,
+  setNewProfileName,
 } from '../../store/slices/uiSlice';
 
 export default function Feed() {
   const dispatch = useDispatch();
-  
+
   // Redux state
   const { users, loading: usersLoading, error: usersError } = useSelector((state) => state.users);
   const { userEvents, loading: eventsLoading, selectedEvent } = useSelector((state) => state.events);
@@ -53,6 +55,9 @@ export default function Feed() {
     endTime,
     timezone,
     viewTimezone,
+    isProfileDropdownOpen,
+    profileSearchQuery,
+    newProfileName,
   } = useSelector((state) => state.ui);
 
   const loading = usersLoading || eventsLoading;
@@ -62,6 +67,7 @@ export default function Feed() {
   const selectedEventRef = useRef(null);
   const dropdownRef = useRef(null);
   const participantsDropdownRef = useRef(null);
+  const profileDropdownRef = useRef(null);
 
   const timezones = [
     { label: 'Eastern Time (ET)', value: 'America/New_York' },
@@ -155,7 +161,7 @@ export default function Feed() {
     };
 
     const result = await dispatch(createEvent(eventData));
-    
+
     if (createEvent.fulfilled.match(result)) {
       dispatch(resetEventForm());
       if (selectedProfile) {
@@ -170,11 +176,24 @@ export default function Feed() {
     if (!newUserName.trim()) return;
 
     const result = await dispatch(addUser(newUserName.trim()));
-    
+
     if (addUser.fulfilled.match(result)) {
       dispatch(setNewUserName(''));
       dispatch(setIsDropdownOpen(false));
       alert('User created successfully!');
+    }
+  };
+
+  // Add handler for adding profile user:
+  const handleAddProfileUser = async () => {
+    if (!newProfileName.trim()) return;
+
+    const result = await dispatch(addUser(newProfileName.trim()));
+
+    if (addUser.fulfilled.match(result)) {
+      dispatch(setNewProfileName(''));
+      dispatch(setIsProfileDropdownOpen(false));
+      alert('Profile added successfully!');
     }
   };
 
@@ -186,6 +205,9 @@ export default function Feed() {
       }
       if (participantsDropdownRef.current && !participantsDropdownRef.current.contains(event.target)) {
         dispatch(setIsParticipantsDropdownOpen(false));
+      }
+      if (profileDropdownRef.current && !profileDropdownRef.current.contains(event.target)) {
+        dispatch(setIsProfileDropdownOpen(false));
       }
     };
 
@@ -208,6 +230,10 @@ export default function Feed() {
   // Filtered users
   const filteredUsers = users.filter(user =>
     user.name.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const filteredProfiles = users.filter(user =>
+    user.name.toLowerCase().includes(profileSearchQuery.toLowerCase())
   );
 
   const filteredParticipants = users.filter(user =>
@@ -238,7 +264,7 @@ export default function Feed() {
           <h1 className="event-title">Event Management</h1>
           <p className="event-subtitle">Create and manage events across multiple timezones</p>
         </div>
-        <div className="profile-selector-wrapper">
+        {/* <div className="profile-selector-wrapper">
           <select
             className="profile-select"
             disabled={loading}
@@ -255,6 +281,88 @@ export default function Feed() {
             ))}
           </select>
           <ChevronDown className="select-icon" size={18} />
+        </div> */}
+        <div className="profile-selector-wrapper">
+          <div className="custom-dropdown-wrapper" ref={profileDropdownRef}>
+            <div
+              className={`custom-dropdown-trigger profile-dropdown-trigger ${isProfileDropdownOpen ? 'active' : ''}`}
+              onClick={() => dispatch(setIsProfileDropdownOpen(!isProfileDropdownOpen))}
+            >
+              <span className="dropdown-text">
+                {loading ? 'Loading profiles...' :
+                  selectedProfile ? users.find(u => u._id === selectedProfile)?.name : 'Select current profile...'}
+              </span>
+              <ChevronDown
+                size={18}
+                className={`chevron-icon ${isProfileDropdownOpen ? 'rotated' : ''}`}
+              />
+            </div>
+
+            {isProfileDropdownOpen && (
+              <div className="custom-dropdown-menu">
+                <div className="search-wrapper">
+                  <Search size={16} className="search-icon" />
+                  <input
+                    type="text"
+                    className="search-input"
+                    placeholder="Search profiles..."
+                    value={profileSearchQuery}
+                    onChange={(e) => dispatch(setProfileSearchQuery(e.target.value))}
+                  />
+                  {profileSearchQuery && (
+                    <X
+                      size={16}
+                      className="clear-icon"
+                      onClick={() => dispatch(setProfileSearchQuery(''))}
+                    />
+                  )}
+                </div>
+
+                <div className="user-list">
+                  {filteredProfiles.length > 0 ? (
+                    filteredProfiles.map((user) => (
+                      <div
+                        key={user._id}
+                        className={`user-item ${selectedProfile === user._id ? 'selected' : ''}`}
+                        onClick={() => {
+                          dispatch(setSelectedProfile(user._id));
+                          dispatch(setIsProfileDropdownOpen(false));
+                          dispatch(setProfileSearchQuery(''));
+                        }}
+                      >
+                        <Users size={16} className="user-icon" />
+                        <span>{user.name}</span>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="no-results">No profiles found</div>
+                  )}
+                </div>
+
+                <div className="add-user-section">
+                  <div className="add-user-divider profile" />
+                  <div className="add-user-input-wrapper profile-edit">
+                    <input
+                      type="text"
+                      className="add-user-input"
+                      placeholder="Enter new profile name..."
+                      value={newProfileName}
+                      onChange={(e) => dispatch(setNewProfileName(e.target.value))}
+                      onKeyPress={(e) => e.key === 'Enter' && handleAddProfileUser()}
+                    />
+                    <button
+                      className="add-user-button"
+                      onClick={handleAddProfileUser}
+                      disabled={!newProfileName.trim()}
+                    >
+                      <Plus size={16} />
+                      Add
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -401,7 +509,7 @@ export default function Feed() {
                           <div className="checkbox-wrapper">
                             {selectedParticipants.includes(user._id) && (
                               <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="checkmark-icon">
-                                <path d="M13.5 4.5L6 12L2.5 8.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                                <path d="M13.5 4.5L6 12L2.5 8.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                               </svg>
                             )}
                           </div>

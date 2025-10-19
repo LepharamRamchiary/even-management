@@ -1,37 +1,40 @@
-import { createSlice } from '@reduxjs/toolkit';
+import { createSlice } from "@reduxjs/toolkit";
 
 const uiSlice = createSlice({
-  name: 'ui',
+  name: "ui",
   initialState: {
     // Modal states
     isModalOpen: false,
-    modalMode: 'edit',
-    
+    modalMode: "edit",
+
     // Profile selections
-    selectedProfile: '',
-    selectedProfileEvent: '',
+    selectedProfile: "",
+    selectedProfileEvent: "",
     selectedParticipants: [],
-    
+
     // Dropdown states
     isDropdownOpen: false,
     isParticipantsDropdownOpen: false,
-    searchQuery: '',
-    participantSearchQuery: '',
-    newUserName: '',
-    
+    searchQuery: "",
+    participantSearchQuery: "",
+    newUserName: "",
+    isProfileDropdownOpen: false,
+    profileSearchQuery: "",
+    newProfileName: "",
+
     // Form data
-    startDate: '',
-    endDate: '',
-    startTime: '09:00',
-    endTime: '09:00',
-    timezone: 'America/New_York',
-    viewTimezone: 'America/New_York',
+    startDate: "",
+    endDate: "",
+    startTime: "09:00",
+    endTime: "09:00",
+    timezone: "America/New_York",
+    viewTimezone: "America/New_York",
   },
   reducers: {
     // Modal actions
     openModal: (state, action) => {
       state.isModalOpen = true;
-      state.modalMode = action.payload || 'edit';
+      state.modalMode = action.payload || "edit";
     },
     closeModal: (state) => {
       state.isModalOpen = false;
@@ -39,7 +42,7 @@ const uiSlice = createSlice({
     setModalMode: (state, action) => {
       state.modalMode = action.payload;
     },
-    
+
     // Profile selections
     setSelectedProfile: (state, action) => {
       state.selectedProfile = action.payload;
@@ -54,13 +57,13 @@ const uiSlice = createSlice({
       const userId = action.payload;
       if (state.selectedParticipants.includes(userId)) {
         state.selectedParticipants = state.selectedParticipants.filter(
-          id => id !== userId
+          (id) => id !== userId
         );
       } else {
         state.selectedParticipants.push(userId);
       }
     },
-    
+
     // Dropdown actions
     setIsDropdownOpen: (state, action) => {
       state.isDropdownOpen = action.payload;
@@ -77,7 +80,16 @@ const uiSlice = createSlice({
     setNewUserName: (state, action) => {
       state.newUserName = action.payload;
     },
-    
+    setIsProfileDropdownOpen: (state, action) => {
+      state.isProfileDropdownOpen = action.payload;
+    },
+    setProfileSearchQuery: (state, action) => {
+      state.profileSearchQuery = action.payload;
+    },
+    setNewProfileName: (state, action) => {
+      state.newProfileName = action.payload;
+    },
+
     // Form data actions
     setStartDate: (state, action) => {
       state.startDate = action.payload;
@@ -97,25 +109,28 @@ const uiSlice = createSlice({
     setViewTimezone: (state, action) => {
       state.viewTimezone = action.payload;
     },
-    
+
     // Reset form
     resetEventForm: (state) => {
-      state.selectedProfileEvent = '';
+      state.selectedProfileEvent = "";
       state.selectedParticipants = [];
-      state.startDate = '';
-      state.endDate = '';
-      state.startTime = '09:00';
-      state.endTime = '09:00';
-      state.timezone = 'America/New_York';
+      state.startDate = "";
+      state.endDate = "";
+      state.startTime = "09:00";
+      state.endTime = "09:00";
+      state.timezone = "America/New_York";
     },
-    
+
     // Reset all dropdowns
     resetDropdowns: (state) => {
       state.isDropdownOpen = false;
       state.isParticipantsDropdownOpen = false;
-      state.searchQuery = '';
-      state.participantSearchQuery = '';
-      state.newUserName = '';
+      state.isProfileDropdownOpen = false;
+      state.searchQuery = "";
+      state.participantSearchQuery = "";
+      state.profileSearchQuery = "";
+      state.newUserName = "";
+      state.newProfileName = "";
     },
   },
 });
@@ -133,6 +148,9 @@ export const {
   setSearchQuery,
   setParticipantSearchQuery,
   setNewUserName,
+  setIsProfileDropdownOpen,
+  setProfileSearchQuery,
+  setNewProfileName,
   setStartDate,
   setEndDate,
   setStartTime,
