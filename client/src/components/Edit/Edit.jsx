@@ -1,14 +1,16 @@
 import React, { useEffect, useState, useRef } from 'react';
+import { useDispatch, useSelector } from 'react-redux';
 import { Calendar, Clock, Plus, ChevronDown, Users, Search, X } from 'lucide-react';
 import './Edit.css';
+import { fetchUsers, addUser } from '../../store/slices/userSlice';
+import { updateEvent } from '../../store/slices/eventSlice';
 
 export default function Edit({ eventData, onClose }) {
-    // console.log("eveentdata", eventData);
-
-    const [users, setUsers] = useState([]);
+    const dispatch = useDispatch();
+    const { users, loading: usersLoading } = useSelector((state) => state.users);
+    const { loading: eventsLoading } = useSelector((state) => state.events);
+    
     const [error, setError] = useState(null);
-    const [loading, setLoading] = useState(false);
-
     const [startDate, setStartDate] = useState('');
     const [endDate, setEndDate] = useState('');
     const [startTime, setStartTime] = useState('09:00');
@@ -17,7 +19,6 @@ export default function Edit({ eventData, onClose }) {
     const [selectedParticipants, setSelectedParticipants] = useState([]);
     const [timezone, setTimezone] = useState('America/New_York');
 
-    // Custom dropdown states
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
     const [isParticipantsDropdownOpen, setIsParticipantsDropdownOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
@@ -25,6 +26,8 @@ export default function Edit({ eventData, onClose }) {
     const [newUserName, setNewUserName] = useState('');
     const dropdownRef = useRef(null);
     const participantsDropdownRef = useRef(null);
+
+    const loading = usersLoading || eventsLoading;
 
     const timezones = [
         { label: 'Eastern Time (ET)', value: 'America/New_York' },
@@ -44,7 +47,6 @@ export default function Edit({ eventData, onClose }) {
         { label: 'Sydney (AEDT/AEST)', value: 'Australia/Sydney' },
         { label: 'Auckland (NZDT/NZST)', value: 'Pacific/Auckland' }
     ];
-
 
     useEffect(() => {
         if (eventData) {
@@ -82,82 +84,43 @@ export default function Edit({ eventData, onClose }) {
             return;
         }
 
-        try {
-            setLoading(true);
-            setError(null);
+        const updatedEventData = {
+            userId: eventData.createdBy?._id || eventData.participants?.[0]?._id,
+            createdBy: selectedProfileEvent,
+            participants: selectedParticipants,
+            timezone,
+            startDate,
+            startTime,
+            endDate,
+            endTime
+        };
 
-            const updatedEventData = {
-                userId: eventData.createdBy?._id || eventData.participants?.[0]?._id,
-                createdBy: selectedProfileEvent,
-                participants: selectedParticipants,
-                timezone,
-                startDate,
-                startTime,
-                endDate,
-                endTime
-            };
+        const result = await dispatch(updateEvent({
+            eventId: eventData._id,
+            eventData: updatedEventData
+        }));
 
-            const res = await fetch(`http://localhost:8000/api/events/${eventData._id}`, {
-                method: "PUT",
-                headers: {
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify(updatedEventData),
-            });
-
-            let data;
-            try {
-                data = await res.json();
-            } catch {
-                throw new Error("Invalid JSON response — maybe an HTML error page");
-            }
-
-            if (!res.ok) {
-                throw new Error(data.message || "Failed to update event");
-            }
-
+        if (updateEvent.fulfilled.match(result)) {
             alert('Event updated successfully!');
             onClose();
-        } catch (error) {
-            console.error("Error updating event:", error);
-            setError(error.message || 'Failed to update event');
-        } finally {
-            setLoading(false);
+        } else {
+            setError(result.payload || 'Failed to update event');
         }
     };
 
-    // Add new user
     const handleAddNewUser = async () => {
         if (!newUserName.trim()) return;
 
-        try {
-            setLoading(true);
-            const res = await fetch("http://localhost:8000/api/user", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify({ name: newUserName.trim() }),
-            });
-
-            const data = await res.json();
-
-            if (!res.ok) {
-                throw new Error(data.message || "Failed to add user");
-            }
-
-            setUsers((prev) => [...prev, data.data]);
+        const result = await dispatch(addUser(newUserName.trim()));
+        
+        if (addUser.fulfilled.match(result)) {
             setNewUserName("");
             setIsDropdownOpen(false);
-        } catch (error) {
-            console.error("Error adding user:", error);
-            setError(error.message);
-        } finally {
-            setLoading(false);
+        } else {
+            setError(result.payload || 'Failed to add user');
         }
     };
 
-    // Close dropdown when clicking outside
     useEffect(() => {
         const handleClickOutside = (event) => {
             if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
@@ -172,28 +135,9 @@ export default function Edit({ eventData, onClose }) {
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
-    // Fetch users
     useEffect(() => {
-        const fetchUsers = async () => {
-            try {
-                const res = await fetch("http://localhost:8000/api/user");
-                const data = await res.json();
-
-                if (!res.ok) {
-                    throw new Error(data.message || 'Failed to fetch users');
-                }
-
-                console.log('Users fetched:', data.data);
-                setUsers(data.data);
-            } catch (error) {
-                console.error('Error fetching users:', error);
-                setError(error.message || 'Failed to fetch users');
-                setUsers([]);
-            }
-        };
-
-        fetchUsers();
-    }, []);
+        dispatch(fetchUsers());
+    }, [dispatch]);
 
     const filteredUsers = users.filter(user =>
         user.name.toLowerCase().includes(searchQuery.toLowerCase())
@@ -230,7 +174,6 @@ export default function Edit({ eventData, onClose }) {
         }
     };
 
-    // Show loading state while data is being loaded
     if (!eventData) {
         return (
             <div className="event-container-edit">
@@ -258,7 +201,6 @@ export default function Edit({ eventData, onClose }) {
                      <button onClick={onClose} className="close-btn">&times;</button>
                    </div>
 
-                    {/* Rest of your form JSX remains the same */}
                     <div className="form-group">
                         <label className="form-label">Event Creator</label>
                         <div className="custom-dropdown-wrapper" ref={dropdownRef}>

@@ -1,82 +1,65 @@
-import React, { useEffect, useState, useRef, useCallback } from 'react';
+import React, { useEffect, useCallback, useRef } from 'react';
+import { useDispatch, useSelector } from 'react-redux';
 import { Calendar, Clock, Plus, ChevronDown, Users, SquarePen, StickyNote, Search, X } from 'lucide-react';
 import Model from '../../components/Model/Model.jsx';
 import Edit from '../../components/Edit/Edit.jsx';
 import History from "../../components/History/History.jsx";
 import './Feed.css';
 
+// Redux actions
+import { fetchUsers, addUser, clearUserError } from '../../store/slices/userSlice';
+import { fetchUserEvents, createEvent, setSelectedEvent, clearSelectedEvent } from '../../store/slices/eventSlice';
+import {
+  openModal,
+  closeModal,
+  setModalMode,
+  setSelectedProfile,
+  setSelectedProfileEvent,
+  toggleParticipant,
+  setIsDropdownOpen,
+  setIsParticipantsDropdownOpen,
+  setSearchQuery,
+  setParticipantSearchQuery,
+  setNewUserName,
+  setStartDate,
+  setEndDate,
+  setStartTime,
+  setEndTime,
+  setTimezone,
+  setViewTimezone,
+  resetEventForm,
+} from '../../store/slices/uiSlice';
+
 export default function Feed() {
-  const [users, setUsers] = useState([]);
-  const [error, setError] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [userEvents, setUserEvents] = useState([]);
+  const dispatch = useDispatch();
+  
+  // Redux state
+  const { users, loading: usersLoading, error: usersError } = useSelector((state) => state.users);
+  const { userEvents, loading: eventsLoading, selectedEvent } = useSelector((state) => state.events);
+  const {
+    isModalOpen,
+    modalMode,
+    selectedProfile,
+    selectedProfileEvent,
+    selectedParticipants,
+    isDropdownOpen,
+    isParticipantsDropdownOpen,
+    searchQuery,
+    participantSearchQuery,
+    newUserName,
+    startDate,
+    endDate,
+    startTime,
+    endTime,
+    timezone,
+    viewTimezone,
+  } = useSelector((state) => state.ui);
 
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
-  const [startTime, setStartTime] = useState('09:00');
-  const [endTime, setEndTime] = useState('09:00');
-  const [selectedProfile, setSelectedProfile] = useState('');
-  const [selectedProfileEvent, setSelectedProfileEvent] = useState('');
-  const [selectedParticipants, setSelectedParticipants] = useState([]);
-  const [timezone, setTimezone] = useState('America/New_York');
-  const [viewTimezone, setViewTimezone] = useState('America/New_York');
-
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [selectedEvent, setSelectedEvent] = useState(null);
-  const [modalMode, setModalMode] = useState('edit');
+  const loading = usersLoading || eventsLoading;
+  const error = usersError;
 
   const modalOpenRef = useRef(false);
   const selectedEventRef = useRef(null);
-
-  const handleEditClick = useCallback((event) => {
-    // console.log('Edit clicked for:', event._id);
-    setModalMode('edit');
-    modalOpenRef.current = false;
-    selectedEventRef.current = event;
-    requestAnimationFrame(() => {
-      setSelectedEvent(event);
-      setIsModalOpen(false);
-
-      requestAnimationFrame(() => {
-        modalOpenRef.current = true;
-        setIsModalOpen(true);
-      });
-    });
-  }, []);
-
-  const handleViewLogsClick = useCallback((event) => {
-    setModalMode('history'); modalOpenRef.current = false;
-    requestAnimationFrame(() => {
-      setSelectedEvent(event); setIsModalOpen(false);
-      requestAnimationFrame(() => {
-        modalOpenRef.current = true;
-        setIsModalOpen(true);
-      });
-    });
-  }, []);
-
-  const handleModalClose = useCallback(() => {
-    console.log('Closing modal');
-    modalOpenRef.current = false;
-
-    setIsModalOpen(false);
-
-    requestAnimationFrame(() => {
-      setSelectedEvent(null);
-      selectedEventRef.current = null;
-
-      if (selectedProfile) {
-        fetchUserEventsById(selectedProfile);
-      }
-    });
-  }, [selectedProfile]);
-
-  // Custom dropdown states
-  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
-  const [isParticipantsDropdownOpen, setIsParticipantsDropdownOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [participantSearchQuery, setParticipantSearchQuery] = useState('');
-  const [newUserName, setNewUserName] = useState('');
   const dropdownRef = useRef(null);
   const participantsDropdownRef = useRef(null);
 
@@ -99,173 +82,130 @@ export default function Feed() {
     { label: 'Auckland (NZDT/NZST)', value: 'Pacific/Auckland' }
   ];
 
-  const fetchUserEventsById = async (profileId) => {
-    if (!profileId) {
-      setUserEvents([]);
-      return;
-    }
+  // Handle edit click
+  const handleEditClick = useCallback((event) => {
+    dispatch(setModalMode('edit'));
+    modalOpenRef.current = false;
+    selectedEventRef.current = event;
+    requestAnimationFrame(() => {
+      dispatch(setSelectedEvent(event));
+      dispatch(closeModal());
 
-    setLoading(true);
-    setError(null);
+      requestAnimationFrame(() => {
+        modalOpenRef.current = true;
+        dispatch(openModal('edit'));
+      });
+    });
+  }, [dispatch]);
 
-    try {
-      const res = await fetch(`http://localhost:8000/api/events/${profileId}`);
-      const data = await res.json();
+  // Handle view logs click
+  const handleViewLogsClick = useCallback((event) => {
+    dispatch(setModalMode('history'));
+    modalOpenRef.current = false;
+    requestAnimationFrame(() => {
+      dispatch(setSelectedEvent(event));
+      dispatch(closeModal());
+      requestAnimationFrame(() => {
+        modalOpenRef.current = true;
+        dispatch(openModal('history'));
+      });
+    });
+  }, [dispatch]);
 
-      if (!res.ok) {
-        throw new Error(data.message || 'Failed to fetch events');
+  // Handle modal close
+  const handleModalClose = useCallback(() => {
+    modalOpenRef.current = false;
+    dispatch(closeModal());
+
+    requestAnimationFrame(() => {
+      dispatch(clearSelectedEvent());
+      selectedEventRef.current = null;
+
+      if (selectedProfile) {
+        dispatch(fetchUserEvents(selectedProfile));
       }
+    });
+  }, [dispatch, selectedProfile]);
 
-      setUserEvents(data.data || []);
-    } catch (error) {
-      console.error('Error fetching user events:', error);
-      setError(error.message || 'Failed to fetch events');
-      setUserEvents([]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // create event
+  // Handle create event
   const handleCreateEvent = async () => {
     if (endDate === startDate && endTime < startTime) {
-      setError("End time cannot be earlier than start time!");
+      alert("End time cannot be earlier than start time!");
       return;
     }
 
     if (!selectedProfileEvent) {
-      setError('Please select a creator profile');
+      alert('Please select a creator profile');
       return;
     }
 
     if (!startDate || !startTime || !endDate || !endTime) {
-      setError('Please fill in all date and time fields');
+      alert('Please fill in all date and time fields');
       return;
     }
 
-    try {
-      setLoading(true);
-      setError(null);
+    const eventData = {
+      createdBy: selectedProfileEvent,
+      participants: selectedParticipants,
+      timezone,
+      startDate,
+      startTime,
+      endDate,
+      endTime
+    };
 
-      const eventData = {
-        createdBy: selectedProfileEvent,
-        participants: selectedParticipants,
-        timezone,
-        startDate,
-        startTime,
-        endDate,
-        endTime
-      };
-
-      const res = await fetch("http://localhost:8000/api/events", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(eventData),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.message || "Failed to create event");
-      }
-
-      setSelectedProfileEvent('');
-      setSelectedParticipants([]);
-      setStartDate('');
-      setEndDate('');
-      setStartTime('09:00');
-      setEndTime('09:00');
-      setTimezone('America/New_York');
-
+    const result = await dispatch(createEvent(eventData));
+    
+    if (createEvent.fulfilled.match(result)) {
+      dispatch(resetEventForm());
       if (selectedProfile) {
-        fetchUserEventsById(selectedProfile);
+        dispatch(fetchUserEvents(selectedProfile));
       }
-
       alert('Event created successfully!');
-    } catch (error) {
-      console.error("Error creating event:", error);
-      setError(error.message);
-    } finally {
-      setLoading(false);
     }
   };
 
+  // Handle add new user
   const handleAddNewUser = async () => {
     if (!newUserName.trim()) return;
 
-    try {
-      setLoading(true);
-      const res = await fetch("http://localhost:8000/api/user", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ name: newUserName.trim() }),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.message || "Failed to add user");
-      }
-
-      setUsers((prev) => [...prev, data.data]);
-      setNewUserName("");
-      setIsDropdownOpen(false);
-    } catch (error) {
-      console.error("Error adding user:", error);
-      setError(error.message);
-    } finally {
-      setLoading(false);
+    const result = await dispatch(addUser(newUserName.trim()));
+    
+    if (addUser.fulfilled.match(result)) {
+      dispatch(setNewUserName(''));
+      dispatch(setIsDropdownOpen(false));
+      alert('User created successfully!');
     }
   };
 
+  // Close dropdowns on outside click
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
-        setIsDropdownOpen(false);
+        dispatch(setIsDropdownOpen(false));
       }
       if (participantsDropdownRef.current && !participantsDropdownRef.current.contains(event.target)) {
-        setIsParticipantsDropdownOpen(false);
+        dispatch(setIsParticipantsDropdownOpen(false));
       }
     };
 
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+  }, [dispatch]);
 
+  // Fetch users on mount
   useEffect(() => {
-    const fetchUsers = async () => {
-      setLoading(true);
-      setError(null);
+    dispatch(fetchUsers());
+  }, [dispatch]);
 
-      try {
-        const res = await fetch("http://localhost:8000/api/user");
-        const data = await res.json();
-
-        if (!res.ok) {
-          throw new Error(data.message || 'Failed to fetch users');
-        }
-
-        setUsers(data.data);
-      } catch (error) {
-        console.error('Error fetching users:', error);
-        setError(error.message || 'Failed to fetch users');
-        setUsers([]);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchUsers();
-  }, []);
-
+  // Fetch events when profile changes
   useEffect(() => {
-    fetchUserEventsById(selectedProfile);
-  }, [selectedProfile]);
+    if (selectedProfile) {
+      dispatch(fetchUserEvents(selectedProfile));
+    }
+  }, [dispatch, selectedProfile]);
 
+  // Filtered users
   const filteredUsers = users.filter(user =>
     user.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
@@ -278,16 +218,6 @@ export default function Feed() {
   const getSelectedUserName = () => {
     const user = users.find(u => u._id === selectedProfileEvent);
     return user ? user.name : 'Select creator...';
-  };
-
-  const toggleParticipant = (userId) => {
-    setSelectedParticipants(prev => {
-      if (prev.includes(userId)) {
-        return prev.filter(id => id !== userId);
-      } else {
-        return [...prev, userId];
-      }
-    });
   };
 
   const getParticipantDisplayText = () => {
@@ -313,7 +243,7 @@ export default function Feed() {
             className="profile-select"
             disabled={loading}
             value={selectedProfile}
-            onChange={(e) => setSelectedProfile(e.target.value)}
+            onChange={(e) => dispatch(setSelectedProfile(e.target.value))}
           >
             <option value="">
               {loading ? 'Loading profiles...' : 'Select current profile...'}
@@ -329,7 +259,7 @@ export default function Feed() {
       </div>
 
       {error && (
-        <p className="error-message" onClick={() => setError(null)}>
+        <p className="error-message" onClick={() => dispatch(clearUserError())}>
           {error}
         </p>
       )}
@@ -343,7 +273,7 @@ export default function Feed() {
             <div className="custom-dropdown-wrapper" ref={dropdownRef}>
               <div
                 className={`custom-dropdown-trigger ${isDropdownOpen ? 'active' : ''}`}
-                onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                onClick={() => dispatch(setIsDropdownOpen(!isDropdownOpen))}
               >
                 <span className="dropdown-text">
                   {loading ? 'Loading profiles...' : getSelectedUserName()}
@@ -363,13 +293,13 @@ export default function Feed() {
                       className="search-input"
                       placeholder="Search profiles..."
                       value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
+                      onChange={(e) => dispatch(setSearchQuery(e.target.value))}
                     />
                     {searchQuery && (
                       <X
                         size={16}
                         className="clear-icon"
-                        onClick={() => setSearchQuery('')}
+                        onClick={() => dispatch(setSearchQuery(''))}
                       />
                     )}
                   </div>
@@ -381,9 +311,9 @@ export default function Feed() {
                           key={user._id}
                           className={`user-item ${selectedProfileEvent === user._id ? 'selected' : ''}`}
                           onClick={() => {
-                            setSelectedProfileEvent(user._id);
-                            setIsDropdownOpen(false);
-                            setSearchQuery('');
+                            dispatch(setSelectedProfileEvent(user._id));
+                            dispatch(setIsDropdownOpen(false));
+                            dispatch(setSearchQuery(''));
                           }}
                         >
                           <Users size={16} className="user-icon" />
@@ -403,7 +333,7 @@ export default function Feed() {
                         className="add-user-input"
                         placeholder="Enter new profile name..."
                         value={newUserName}
-                        onChange={(e) => setNewUserName(e.target.value)}
+                        onChange={(e) => dispatch(setNewUserName(e.target.value))}
                         onKeyPress={(e) => e.key === 'Enter' && handleAddNewUser()}
                       />
                       <button
@@ -426,7 +356,7 @@ export default function Feed() {
             <div className="custom-dropdown-wrapper" ref={participantsDropdownRef}>
               <div
                 className={`custom-dropdown-trigger ${isParticipantsDropdownOpen ? 'active' : ''}`}
-                onClick={() => setIsParticipantsDropdownOpen(!isParticipantsDropdownOpen)}
+                onClick={() => dispatch(setIsParticipantsDropdownOpen(!isParticipantsDropdownOpen))}
               >
                 <span className="dropdown-text">
                   {loading ? 'Loading profiles...' : getParticipantDisplayText()}
@@ -449,13 +379,13 @@ export default function Feed() {
                       className="search-input"
                       placeholder="Search participants..."
                       value={participantSearchQuery}
-                      onChange={(e) => setParticipantSearchQuery(e.target.value)}
+                      onChange={(e) => dispatch(setParticipantSearchQuery(e.target.value))}
                     />
                     {participantSearchQuery && (
                       <X
                         size={16}
                         className="clear-icon"
-                        onClick={() => setParticipantSearchQuery('')}
+                        onClick={() => dispatch(setParticipantSearchQuery(''))}
                       />
                     )}
                   </div>
@@ -466,24 +396,12 @@ export default function Feed() {
                         <div
                           key={user._id}
                           className={`user-item-checkbox ${selectedParticipants.includes(user._id) ? 'selected' : ''}`}
-                          onClick={() => toggleParticipant(user._id)}
+                          onClick={() => dispatch(toggleParticipant(user._id))}
                         >
                           <div className="checkbox-wrapper">
                             {selectedParticipants.includes(user._id) && (
-                              <svg
-                                width="16"
-                                height="16"
-                                viewBox="0 0 16 16"
-                                fill="none"
-                                className="checkmark-icon"
-                              >
-                                <path
-                                  d="M13.5 4.5L6 12L2.5 8.5"
-                                  stroke="currentColor"
-                                  strokeWidth="2"
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                />
+                              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="checkmark-icon">
+                                <path d="M13.5 4.5L6 12L2.5 8.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                               </svg>
                             )}
                           </div>
@@ -508,7 +426,7 @@ export default function Feed() {
               <select
                 className="form-select"
                 value={timezone}
-                onChange={(e) => setTimezone(e.target.value)}
+                onChange={(e) => dispatch(setTimezone(e.target.value))}
               >
                 {timezones.map(tz => (
                   <option key={tz.value} value={tz.value}>{tz.label}</option>
@@ -527,7 +445,7 @@ export default function Feed() {
                   type="date"
                   className="date-input"
                   value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
+                  onChange={(e) => dispatch(setStartDate(e.target.value))}
                   min={new Date().toISOString().split("T")[0]}
                   placeholder="Pick a date"
                 />
@@ -538,7 +456,7 @@ export default function Feed() {
                   type="time"
                   className="time-input"
                   value={startTime}
-                  onChange={(e) => setStartTime(e.target.value)}
+                  onChange={(e) => dispatch(setStartTime(e.target.value))}
                 />
               </div>
             </div>
@@ -553,7 +471,7 @@ export default function Feed() {
                   type="date"
                   className="date-input"
                   value={endDate}
-                  onChange={(e) => setEndDate(e.target.value)}
+                  onChange={(e) => dispatch(setEndDate(e.target.value))}
                   min={startDate || new Date().toISOString().split("T")[0]}
                   placeholder="Pick a date"
                 />
@@ -564,7 +482,7 @@ export default function Feed() {
                   type="time"
                   className="time-input"
                   value={endTime}
-                  onChange={(e) => setEndTime(e.target.value)}
+                  onChange={(e) => dispatch(setEndTime(e.target.value))}
                   min={endDate === startDate && startTime ? startTime : ""}
                 />
               </div>
@@ -580,6 +498,7 @@ export default function Feed() {
             {loading ? 'Creating...' : 'Create Event'}
           </button>
         </div>
+
         {/* Events Section */}
         <div className="event-card">
           <h2 className="card-title">Events</h2>
@@ -590,7 +509,7 @@ export default function Feed() {
               <select
                 className="form-select"
                 value={viewTimezone}
-                onChange={(e) => setViewTimezone(e.target.value)}
+                onChange={(e) => dispatch(setViewTimezone(e.target.value))}
               >
                 {timezones.map(tz => (
                   <option key={tz.value} value={tz.value}>{tz.label}</option>
@@ -703,6 +622,7 @@ export default function Feed() {
           )}
         </div>
       </div>
+
       {isModalOpen && selectedEvent && (
         <Model isOpen={isModalOpen} onClose={handleModalClose}>
           {modalMode === 'edit' ? (
@@ -711,7 +631,7 @@ export default function Feed() {
               eventData={selectedEvent}
               onClose={handleModalClose}
               onSave={() => {
-                if (selectedProfile) fetchUserEventsById(selectedProfile);
+                if (selectedProfile) dispatch(fetchUserEvents(selectedProfile));
               }}
             />
           ) : (
@@ -723,7 +643,6 @@ export default function Feed() {
           )}
         </Model>
       )}
-
     </div>
   );
 }
