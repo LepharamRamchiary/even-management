@@ -1,5 +1,6 @@
 import { Route, Routes } from 'react-router-dom'
 import Feed from './pages/Feed/Feed'
+import NotFound from "./pages/NotFound"
 
 function App() {
 
@@ -8,6 +9,7 @@ function App() {
     <>
       <Routes>
         <Route path="/" element={<Feed />} />
+        <Route path="*" element={<NotFound />} />
       </Routes>
     </>
   )
