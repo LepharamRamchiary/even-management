@@ -1,6 +1,6 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 
-const API_BASE_URL = 'http://localhost:8000/api';
+const API_BASE_URL = 'https://even-management-backend.onrender.com/api';
 
 // Async thunk to fetch all users
 export const fetchUsers = createAsyncThunk(
