@@ -1,35 +1,19 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
+import { useDispatch, useSelector } from 'react-redux';
 import './History.css';
+import { fetchEventHistory } from '../../store/slices/eventSlice';
 
 const History = ({ eventData, onClose }) => {
-    const [history, setHistory] = useState([]);
+    const dispatch = useDispatch();
+    const { eventHistory, loading } = useSelector((state) => state.events);
 
     const userId = eventData?.createdBy?._id || eventData?.participants?.[0]?._id;
 
     useEffect(() => {
-        const updateHistory = async () => {
-            try {
-                const res = await fetch(
-                    `http://localhost:8000/api/events/${eventData?._id}/history/${userId}`
-                );
-                const data = await res.json();
-
-                if (!res.ok) {
-                    throw new Error(data.message || 'Failed to fetch history');
-                }
-
-                const historyArray = Array.isArray(data.data)
-                    ? data.data
-                    : data.data?.history || [];
-
-                setHistory(historyArray);
-            } catch (error) {
-                console.error('Error fetching history:', error);
-            }
-        };
-
-        updateHistory();
-    }, [eventData?._id, userId]);
+        if (eventData?._id && userId) {
+            dispatch(fetchEventHistory({ eventId: eventData._id, userId }));
+        }
+    }, [dispatch, eventData?._id, userId]);
 
     const getModifiedFieldsSummary = (changes) => {
         if (!changes || changes.length === 0) return 'No changes';
@@ -65,10 +49,12 @@ const History = ({ eventData, onClose }) => {
                 </div>
 
                 <div className="updates-list">
-                    {history.length === 0 ? (
+                    {loading ? (
+                        <p className="no-history">Loading history...</p>
+                    ) : eventHistory.length === 0 ? (
                         <p className="no-history">No update history available.</p>
                     ) : (
-                        history.map((record, index) => {
+                        eventHistory.map((record, index) => {
                             const actualChanges = getActualChanges(record.changes);
                             if (actualChanges.length === 0) return null;
 
